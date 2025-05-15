@@ -130,10 +130,16 @@ class Parser(object):
             # devoler pro root o nsmap forçado
             #self.root.nsmap = self.nsmap
         
-        # define o tipo de trasacao
-        self.tipo_transacao = self.get_xpath(
-            '//ans:tipoTransacao'
-            )[0].text.replace("\n", '').replace("\t", '')
+        # define o tipo de transação de forma segura
+try:
+    tipo_transacao_node = self.get_xpath('//ans:mensagemTISS/ans:cabecalho/ans:identificacaoTransacao/ans:tipoTransacao')
+    if tipo_transacao_node and tipo_transacao_node[0].text:
+        self.tipo_transacao = tipo_transacao_node[0].text.strip()
+    else:
+        self.tipo_transacao = None
+except Exception as e:
+    self.tipo_transacao = None
+
 
         # no momento so suporta envio de lote
         if self.tipo_transacao == 'ENVIO_LOTE_GUIAS':
@@ -164,22 +170,33 @@ class Parser(object):
         #)[0].text
 
     def get_version(self):
-        '''retorna versao no formato N.NN.NN, conforme xml
-        '''
-        try:
-            # versao 3.0.1
-            versao301 = self.get_xpath(
-                '//ans:Padrao'
-            )
-            if versao301:
-                self.version = versao301[0].text
-            else:
-                self.version = self.get_xpath(
-                    '//ans:versaoPadrao'
-                )[0].text.replace("\n", '').replace("\t", '')
-        except:
-            self.valid = False
-            self.erros['lote']['_versao'] = u"Erro ao detectar a versão do padrão TISS"
+    try:
+        # Primeiro tenta via //ans:Padrao
+        versao = self.get_xpath('//ans:Padrao')
+        if versao and versao[0].text:
+            self.version = versao[0].text.strip()
+            return
+
+        # Tenta via //ans:versaoPadrao
+        versao = self.get_xpath('//ans:versaoPadrao')
+        if versao and versao[0].text:
+            self.version = versao[0].text.strip()
+            return
+
+        # Última tentativa: atributo no cabeçalho
+        versao = self.get_xpath('//ans:cabecalho')
+        if versao and 'versaoPadrao' in versao[0].attrib:
+            self.version = versao[0].attrib['versaoPadrao'].strip()
+            return
+
+        self.version = None
+        self.valido = False
+        self.erros['lote']['_versao'] = u"Erro ao detectar a versão do padrão TISS"
+    except Exception as e:
+        self.version = None
+        self.valido = False
+        self.erros['lote']['_versao'] = u"Erro ao detectar a versão do padrão TISS: %s" % str(e)
+
 
     def xsd_validate(self):
 
